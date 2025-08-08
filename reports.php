@@ -50,6 +50,7 @@ try {
     $stmt = $pdo->query("
         SELECT 
             p.name,
+            p.product_code,
             SUM(bi.quantity) as total_quantity,
             SUM(bi.quantity * bi.unit_price) as total_revenue,
             COUNT(DISTINCT b.id) as order_count
@@ -58,7 +59,7 @@ try {
         LEFT JOIN bookings b ON bi.booking_id = b.id
         LEFT JOIN payments pay ON b.id = pay.booking_id
         WHERE pay.payment_status = 'paid'
-        GROUP BY p.id, p.name
+        GROUP BY p.id, p.name, p.product_code
         ORDER BY total_revenue DESC
         LIMIT 10
     ");
@@ -240,7 +241,12 @@ include 'includes/header.php';
                                         <span style="background: var(--primary-color); color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.875rem; font-weight: 600;">
                                             <?php echo $index + 1; ?>
                                         </span>
-                                        <?php echo htmlspecialchars($product['name']); ?>
+                                        <div>
+                                            <strong><?php echo htmlspecialchars($product['name']); ?></strong>
+                                            <?php if ($product['product_code']): ?>
+                                            <br><small style="color: #666;">Code: <?php echo htmlspecialchars($product['product_code']); ?></small>
+                                            <?php endif; ?>
+                                        </div>
                                     </div>
                                 </td>
                                 <td><?php echo number_format($product['total_quantity']); ?></td>

@@ -27,10 +27,11 @@
                     <i class="fas fa-tachometer-alt"></i> Dashboard
                 </a>
                 
-                <?php if ($_SESSION['role'] === 'moderator'): ?>
                 <a href="products.php" class="nav-link">
                     <i class="fas fa-box"></i> Products
                 </a>
+                
+                <?php if ($_SESSION['role'] === 'moderator'): ?>
                 <a href="create-booking.php" class="nav-link">
                     <i class="fas fa-plus-circle"></i> New Booking
                 </a>
@@ -43,6 +44,12 @@
                 <a href="payments.php" class="nav-link">
                     <i class="fas fa-credit-card"></i> Payments
                 </a>
+                <a href="product-permissions.php" class="nav-link">
+                    <i class="fas fa-clipboard-check"></i> Product Permissions
+                </a>
+                <a href="inventory-history.php" class="nav-link">
+                    <i class="fas fa-history"></i> Inventory History
+                </a>
                 <a href="reports.php" class="nav-link">
                     <i class="fas fa-chart-bar"></i> Reports
                 </a>
@@ -51,6 +58,9 @@
                 <?php if ($_SESSION['role'] === 'storeman'): ?>
                 <a href="deliveries.php" class="nav-link">
                     <i class="fas fa-truck"></i> Deliveries
+                </a>
+                <a href="delivery-inventory.php" class="nav-link">
+                    <i class="fas fa-search"></i> Inventory Check
                 </a>
                 <?php endif; ?>
             </div>

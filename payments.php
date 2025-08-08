@@ -526,7 +526,10 @@ document.addEventListener('DOMContentLoaded', function() {
         booking.items.forEach(item => {
             html += `
                 <tr>
-                    <td>${item.product_name}</td>
+                    <td>
+                        <strong>${item.product_name}</strong>
+                        ${item.product_code ? `<br><small style="color: #666;">Code: ${item.product_code}</small>` : ''}
+                    </td>
                     <td>${item.quantity}</td>
                     <td>$${parseFloat(item.unit_price).toFixed(2)}</td>
                     <td>$${(parseFloat(item.unit_price) * parseInt(item.quantity)).toFixed(2)}</td>

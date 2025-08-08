@@ -41,7 +41,7 @@ try {
     
     // Get booking items
     $stmt = $pdo->prepare("
-        SELECT bi.*, p.name as product_name
+        SELECT bi.*, p.name as product_name, p.product_code, p.sku
         FROM booking_items bi
         LEFT JOIN products p ON bi.product_id = p.id
         WHERE bi.booking_id = ?

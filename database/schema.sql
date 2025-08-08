@@ -94,9 +94,9 @@ INSERT INTO users (username, password, role, full_name, email) VALUES
 ('admin_store', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'storeman', 'Admin Storeman', 'store@trackit.com');
 
 -- Insert sample products
-INSERT INTO products (name, description, category, price, stock_quantity, sku) VALUES
-('Wireless Headphones', 'High-quality wireless headphones with noise cancellation', 'Electronics', 99.99, 50, 'WH001'),
-('Smartphone Case', 'Protective case for smartphones', 'Accessories', 19.99, 100, 'SC001'),
-('Bluetooth Speaker', 'Portable bluetooth speaker with premium sound', 'Electronics', 79.99, 30, 'BS001'),
-('USB Cable', 'High-speed USB charging cable', 'Accessories', 9.99, 200, 'UC001'),
-('Power Bank', '10000mAh portable power bank', 'Electronics', 39.99, 75, 'PB001');
+INSERT INTO products (name, description, category, price, stock_quantity) VALUES
+('Wireless Headphones', 'High-quality wireless headphones with noise cancellation', 'Electronics', 99.99, 50),
+('Smartphone Case', 'Protective case for smartphones', 'Accessories', 19.99, 100),
+('Bluetooth Speaker', 'Portable bluetooth speaker with premium sound', 'Electronics', 79.99, 30),
+('USB Cable', 'High-speed USB charging cable', 'Accessories', 9.99, 200),
+('Power Bank', '10000mAh portable power bank', 'Electronics', 39.99, 75);

@@ -80,4 +80,53 @@ function generateCSRFToken() {
 function verifyCSRFToken($token) {
     return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
 }
+
+/**
+ * Generate unique product code based on category
+ * Format: [2-letter category code][6 random digits]
+ */
+function generateProductCode($category, $pdo) {
+    // Category mapping to 2-letter codes
+    $categoryMappings = [
+        'Electronics' => 'EC',
+        'Accessories' => 'AC',
+        'Beauty' => 'BP',
+        'Saree' => 'SR',
+        'Clothing' => 'CL',
+        'Home & Garden' => 'HG',
+        'Sports' => 'SP',
+        'Books' => 'BK',
+        'Toys' => 'TY',
+        'Jewelry' => 'JW',
+        'Shoes' => 'SH',
+        'Bags' => 'BG',
+        'Other' => 'OT'
+    ];
+    
+    // Get category prefix
+    $categoryPrefix = $categoryMappings[$category] ?? 'OT';
+    
+    // Generate unique 6-digit number
+    $maxAttempts = 100;
+    $attempts = 0;
+    
+    do {
+        // Generate 6 random digits
+        $randomDigits = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
+        $productCode = $categoryPrefix . $randomDigits;
+        
+        // Check if this code already exists
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM products WHERE product_code = ?");
+        $stmt->execute([$productCode]);
+        $exists = $stmt->fetchColumn() > 0;
+        
+        $attempts++;
+    } while ($exists && $attempts < $maxAttempts);
+    
+    if ($attempts >= $maxAttempts) {
+        throw new Exception('Unable to generate unique product code after multiple attempts');
+    }
+    
+    return $productCode;
+}
 ?>

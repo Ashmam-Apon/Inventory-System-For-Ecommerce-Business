@@ -250,6 +250,9 @@ include 'includes/header.php';
                                     <option value="<?php echo $product['id']; ?>" 
                                             data-price="<?php echo $product['price']; ?>"
                                             data-stock="<?php echo $product['stock_quantity']; ?>">
+                                        <?php if ($product['product_code']): ?>
+                                        [<?php echo htmlspecialchars($product['product_code']); ?>] 
+                                        <?php endif; ?>
                                         <?php echo htmlspecialchars($product['name']); ?> - 
                                         <?php echo formatCurrency($product['price']); ?>
                                         (Stock: <?php echo $product['stock_quantity']; ?>)
@@ -388,6 +391,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         <option value="<?php echo $product['id']; ?>" 
                                 data-price="<?php echo $product['price']; ?>"
                                 data-stock="<?php echo $product['stock_quantity']; ?>">
+                            <?php if ($product['product_code']): ?>
+                            [<?php echo htmlspecialchars($product['product_code']); ?>] 
+                            <?php endif; ?>
                             <?php echo htmlspecialchars($product['name']); ?> - 
                             <?php echo formatCurrency($product['price']); ?>
                             (Stock: <?php echo $product['stock_quantity']; ?>)

@@ -1,6 +1,6 @@
 <?php
 require_once 'includes/config.php';
-requireRole('moderator');
+requireLogin();
 
 $page_title = 'Products';
 
@@ -13,7 +13,8 @@ $where_conditions = [];
 $params = [];
 
 if ($search) {
-    $where_conditions[] = "(name LIKE ? OR description LIKE ? OR sku LIKE ?)";
+    $where_conditions[] = "(name LIKE ? OR description LIKE ? OR sku LIKE ? OR product_code LIKE ?)";
+    $params[] = "%$search%";
     $params[] = "%$search%";
     $params[] = "%$search%";
     $params[] = "%$search%";
@@ -57,10 +58,12 @@ include 'includes/header.php';
             <i class="fas fa-box"></i>
             Products Inventory
         </h1>
+        <?php if ($_SESSION['role'] === 'moderator'): ?>
         <a href="create-booking.php" class="btn btn-primary">
             <i class="fas fa-plus"></i>
             Create Booking
         </a>
+        <?php endif; ?>
     </div>
     
     <!-- Search and Filters -->
@@ -69,7 +72,7 @@ include 'includes/header.php';
             <div class="search-input">
                 <i class="fas fa-search"></i>
                 <input type="text" name="search" id="searchInput" class="form-input" 
-                       placeholder="Search products by name, description, or SKU..." 
+                       placeholder="Search products by name, description, code, or SKU..." 
                        value="<?php echo htmlspecialchars($search); ?>">
             </div>
             <div class="form-group">
@@ -123,24 +126,32 @@ include 'includes/header.php';
                     <?php endif; ?>
                 </div>
                 
-                <?php if ($product['sku']): ?>
                 <div style="margin-bottom: 15px;">
+                    <?php if ($product['product_code']): ?>
+                    <small style="color: var(--text-secondary); display: block;">
+                        <strong>Code: <?php echo htmlspecialchars($product['product_code']); ?></strong>
+                    </small>
+                    <?php endif; ?>
+                    <?php if ($product['sku'] && $product['sku'] !== $product['product_code']): ?>
                     <small style="color: var(--text-secondary);">
                         SKU: <?php echo htmlspecialchars($product['sku']); ?>
                     </small>
+                    <?php endif; ?>
                 </div>
-                <?php endif; ?>
                 
+                <?php if ($_SESSION['role'] === 'moderator'): ?>
                 <div style="display: flex; gap: 10px;">
                     <button type="button" class="btn btn-primary btn-sm select-product" 
                             data-id="<?php echo $product['id']; ?>"
                             data-name="<?php echo htmlspecialchars($product['name']); ?>"
+                            data-code="<?php echo htmlspecialchars($product['product_code'] ?? ''); ?>"
                             data-price="<?php echo $product['price']; ?>"
                             data-stock="<?php echo $product['stock_quantity']; ?>">
                         <i class="fas fa-plus"></i>
                         Select for Booking
                     </button>
                 </div>
+                <?php endif; ?>
             </div>
         </div>
         <?php endforeach; ?>
@@ -169,6 +180,7 @@ include 'includes/header.php';
     <?php endif; ?>
 </div>
 
+<?php if ($_SESSION['role'] === 'moderator'): ?>
 <!-- Selected Products Modal -->
 <div id="selectedProductsModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">
     <div style="background: white; padding: 30px; border-radius: 12px; max-width: 500px; width: 90%; max-height: 70vh; overflow-y: auto;">
@@ -208,6 +220,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const product = {
                 id: this.dataset.id,
                 name: this.dataset.name,
+                code: this.dataset.code,
                 price: parseFloat(this.dataset.price),
                 stock: parseInt(this.dataset.stock),
                 quantity: 1
@@ -269,8 +282,9 @@ document.addEventListener('DOMContentLoaded', function() {
             html += `
                 <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px;">
                     <div>
-                        <strong>${product.name}</strong><br>
-                        <small>$${product.price.toFixed(2)} each</small>
+                        <strong>${product.name}</strong>
+                        ${product.code ? `<br><small style="color: #666;">Code: ${product.code}</small>` : ''}
+                        <br><small>$${product.price.toFixed(2)} each</small>
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <button type="button" onclick="updateQuantity(${index}, -1)" style="background: var(--error-color); color: white; border: none; border-radius: 4px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer;">-</button>
@@ -305,5 +319,6 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 });
 </script>
+<?php endif; ?>
 
 <?php include 'includes/footer.php'; ?>

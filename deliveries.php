@@ -28,17 +28,87 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 try {
                     $pdo->beginTransaction();
                     
+                    // Check if this is the first time marking as delivered to avoid double deduction
+                    $stmt = $pdo->prepare("
+                        SELECT status FROM bookings WHERE id = ? AND status = 'approved'
+                    ");
+                    $stmt->execute([$booking_id]);
+                    $current_booking = $stmt->fetch();
+                    
+                    if (!$current_booking) {
+                        throw new Exception('Booking not found or not ready for delivery.');
+                    }
+                    
+                    // If marking as delivered, update inventory
+                    if ($delivery_status === 'delivered') {
+                        // Check if inventory has already been deducted for this booking
+                        $stmt = $pdo->prepare("
+                            SELECT COUNT(*) as transaction_count 
+                            FROM inventory_transactions 
+                            WHERE booking_id = ? AND transaction_type = 'delivery'
+                        ");
+                        $stmt->execute([$booking_id]);
+                        $existing_transactions = $stmt->fetch()['transaction_count'];
+                        
+                        if ($existing_transactions == 0) {
+                            // Get booking items to update inventory
+                            $stmt = $pdo->prepare("
+                                SELECT bi.product_id, bi.quantity, p.name as product_name, p.stock_quantity 
+                                FROM booking_items bi 
+                                JOIN products p ON bi.product_id = p.id
+                                WHERE bi.booking_id = ?
+                            ");
+                            $stmt->execute([$booking_id]);
+                            $booking_items = $stmt->fetchAll();
+                            
+                            $inventory_warnings = [];
+                            
+                            // Update inventory for each product
+                            foreach ($booking_items as $item) {
+                                $new_quantity = max(0, $item['stock_quantity'] - $item['quantity']);
+                                
+                                // Update product quantity
+                                $stmt = $pdo->prepare("
+                                    UPDATE products 
+                                    SET stock_quantity = ?, updated_at = NOW()
+                                    WHERE id = ?
+                                ");
+                                $stmt->execute([$new_quantity, $item['product_id']]);
+                                
+                                // Log inventory transaction
+                                $stmt = $pdo->prepare("
+                                    INSERT INTO inventory_transactions 
+                                    (product_id, transaction_type, quantity_change, booking_id, notes, created_by)
+                                    VALUES (?, 'delivery', ?, ?, ?, ?)
+                                ");
+                                $stmt->execute([
+                                    $item['product_id'], 
+                                    -$item['quantity'], 
+                                    $booking_id,
+                                    "Delivered to customer via booking #{$booking_id}",
+                                    $_SESSION['user_id']
+                                ]);
+                                
+                                // Check for low stock warning
+                                if ($item['stock_quantity'] < $item['quantity']) {
+                                    $inventory_warnings[] = "Warning: {$item['product_name']} had insufficient stock. Delivered: {$item['quantity']}, Available: {$item['stock_quantity']}";
+                                }
+                            }
+                            
+                            // Store warnings in session for display
+                            if (!empty($inventory_warnings)) {
+                                $_SESSION['inventory_warnings'] = $inventory_warnings;
+                            }
+                        }
+                    }
+                    
                     // Update booking status
                     $stmt = $pdo->prepare("
                         UPDATE bookings 
                         SET status = ?, storeman_id = ?, updated_at = NOW() 
-                        WHERE id = ? AND status = 'approved'
+                        WHERE id = ?
                     ");
                     $stmt->execute([$delivery_status, $_SESSION['user_id'], $booking_id]);
-                    
-                    if ($stmt->rowCount() === 0) {
-                        throw new Exception('Booking not found or not ready for delivery.');
-                    }
                     
                     // Insert or update delivery details
                     $stmt = $pdo->prepare("
@@ -63,8 +133,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     
                     $pdo->commit();
                     
-                    $status_text = $delivery_status === 'delivered' ? 'delivered' : 'marked as not delivered';
-                    $success = "Booking #$booking_id has been $status_text.";
+                    if ($delivery_status === 'delivered') {
+                        $success = "Booking #$booking_id has been delivered and inventory has been updated.";
+                    } else {
+                        $success = "Booking #$booking_id has been marked as not delivered.";
+                    }
                     
                 } catch (Exception $e) {
                     $pdo->rollBack();
@@ -166,6 +239,20 @@ include 'includes/header.php';
         <?php echo $error; ?>
     </div>
     <?php endif; ?>
+    
+    <?php if (isset($_SESSION['inventory_warnings'])): ?>
+    <div class="alert alert-warning">
+        <i class="fas fa-exclamation-triangle"></i>
+        <strong>Inventory Warnings:</strong>
+        <ul style="margin: 10px 0 0 20px;">
+            <?php foreach ($_SESSION['inventory_warnings'] as $warning): ?>
+            <li><?php echo htmlspecialchars($warning); ?></li>
+            <?php endforeach; ?>
+        </ul>
+    </div>
+    <?php 
+    unset($_SESSION['inventory_warnings']); // Clear warnings after displaying
+    endif; ?>
     
     <!-- Statistics -->
     <div class="stats-grid">
@@ -505,7 +592,10 @@ document.addEventListener('DOMContentLoaded', function() {
         booking.items.forEach(item => {
             html += `
                 <tr>
-                    <td>${item.product_name}</td>
+                    <td>
+                        <strong>${item.product_name}</strong>
+                        ${item.product_code ? `<br><small style="color: #666;">Code: ${item.product_code}</small>` : ''}
+                    </td>
                     <td>${item.quantity}</td>
                     <td>$${parseFloat(item.unit_price).toFixed(2)}</td>
                     <td>$${(parseFloat(item.unit_price) * parseInt(item.quantity)).toFixed(2)}</td>
