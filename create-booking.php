@@ -153,6 +153,37 @@ include 'includes/header.php';
     <form method="POST" id="bookingForm">
         <input type="hidden" name="csrf_token" value="<?php echo generateCSRFToken(); ?>">
         
+        <!-- Existing Customer Lookup -->
+        <div class="card" style="margin-bottom: 20px;">
+            <div class="card-header">
+                <h2 class="card-title">
+                    <i class="fas fa-search"></i>
+                    Existing Customer Lookup
+                </h2>
+                <button type="button" id="toggleCustomerLookup" class="btn btn-outline btn-sm">
+                    <i class="fas fa-eye"></i>
+                    Check Existing Customer
+                </button>
+            </div>
+            <div class="card-content" id="customerLookupSection" style="display: none;">
+                <div class="form-group">
+                    <label class="form-label">Customer Phone Number</label>
+                    <div style="display: flex; gap: 10px; align-items: end;">
+                        <input type="tel" id="lookupPhone" class="form-input" 
+                               placeholder="Enter phone number to search..." style="flex: 1;">
+                        <button type="button" id="searchCustomer" class="btn btn-primary">
+                            <i class="fas fa-search"></i>
+                            Search
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="customerLookupResults" style="display: none; margin-top: 20px;">
+                    <!-- Customer lookup results will be displayed here -->
+                </div>
+            </div>
+        </div>
+        
         <div class="grid grid-2">
             <!-- Customer Information -->
             <div class="card">
@@ -244,21 +275,28 @@ include 'includes/header.php';
                         <div class="form-row">
                             <div class="form-group">
                                 <label class="form-label">Product *</label>
-                                <select name="items[0][product_id]" class="form-select product-select" required>
-                                    <option value="">Select Product</option>
-                                    <?php foreach ($products as $product): ?>
-                                    <option value="<?php echo $product['id']; ?>" 
-                                            data-price="<?php echo $product['price']; ?>"
-                                            data-stock="<?php echo $product['stock_quantity']; ?>">
-                                        <?php if ($product['product_code']): ?>
-                                        [<?php echo htmlspecialchars($product['product_code']); ?>] 
-                                        <?php endif; ?>
-                                        <?php echo htmlspecialchars($product['name']); ?> - 
-                                        <?php echo formatCurrency($product['price']); ?>
-                                        (Stock: <?php echo $product['stock_quantity']; ?>)
-                                    </option>
-                                    <?php endforeach; ?>
-                                </select>
+                                <div class="searchable-select-container">
+                                    <input type="text" class="form-input product-search" placeholder="Search products..." autocomplete="off">
+                                    <select name="items[0][product_id]" class="form-select product-select" required>
+                                        <option value="">Select Product</option>
+                                        <?php foreach ($products as $product): ?>
+                                        <option value="<?php echo $product['id']; ?>" 
+                                                data-price="<?php echo $product['price']; ?>"
+                                                data-stock="<?php echo $product['stock_quantity']; ?>"
+                                                data-search-text="<?php echo strtolower(($product['product_code'] ? '[' . $product['product_code'] . '] ' : '') . $product['name']); ?>">
+                                            <?php if ($product['product_code']): ?>
+                                            [<?php echo htmlspecialchars($product['product_code']); ?>] 
+                                            <?php endif; ?>
+                                            <?php echo htmlspecialchars($product['name']); ?> - 
+                                            <?php echo formatCurrency($product['price']); ?>
+                                            (Stock: <?php echo $product['stock_quantity']; ?>)
+                                        </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <div class="search-dropdown" style="display: none;">
+                                        <div class="search-results"></div>
+                                    </div>
+                                </div>
                             </div>
                             <div class="form-group">
                                 <label class="form-label">Quantity *</label>
@@ -306,6 +344,219 @@ document.addEventListener('DOMContentLoaded', function() {
     const itemsContainer = document.getElementById('itemsContainer');
     const addItemButton = document.getElementById('addItem');
     
+    // Customer lookup functionality
+    const toggleCustomerLookup = document.getElementById('toggleCustomerLookup');
+    const customerLookupSection = document.getElementById('customerLookupSection');
+    const searchCustomerBtn = document.getElementById('searchCustomer');
+    const lookupPhoneInput = document.getElementById('lookupPhone');
+    const lookupResults = document.getElementById('customerLookupResults');
+    
+    // Toggle customer lookup section
+    toggleCustomerLookup.addEventListener('click', function() {
+        const isVisible = customerLookupSection.style.display !== 'none';
+        customerLookupSection.style.display = isVisible ? 'none' : 'block';
+        this.innerHTML = isVisible ? 
+            '<i class="fas fa-eye"></i> Check Existing Customer' : 
+            '<i class="fas fa-eye-slash"></i> Hide Customer Lookup';
+    });
+    
+    // Search customer
+    searchCustomerBtn.addEventListener('click', searchCustomer);
+    lookupPhoneInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            searchCustomer();
+        }
+    });
+    
+    function searchCustomer() {
+        const phone = lookupPhoneInput.value.trim();
+        if (!phone) {
+            alert('Please enter a phone number');
+            return;
+        }
+        
+        // Show loading state
+        searchCustomerBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Searching...';
+        searchCustomerBtn.disabled = true;
+        lookupResults.style.display = 'none';
+        
+        // Make AJAX request
+        fetch('ajax/customer-lookup.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ phone: phone })
+        })
+        .then(response => response.json())
+        .then(data => {
+            displayCustomerResults(data);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            lookupResults.innerHTML = `
+                <div class="alert alert-error">
+                    <i class="fas fa-exclamation-circle"></i>
+                    An error occurred while searching. Please try again.
+                </div>
+            `;
+            lookupResults.style.display = 'block';
+        })
+        .finally(() => {
+            // Reset button state
+            searchCustomerBtn.innerHTML = '<i class="fas fa-search"></i> Search';
+            searchCustomerBtn.disabled = false;
+        });
+    }
+    
+    function displayCustomerResults(data) {
+        if (!data.found) {
+            lookupResults.innerHTML = `
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    ${data.message}
+                </div>
+            `;
+        } else {
+            lookupResults.innerHTML = generateCustomerResultsHTML(data);
+        }
+        lookupResults.style.display = 'block';
+    }
+    
+    function generateCustomerResultsHTML(data) {
+        const latestOrder = data.latest_order;
+        const customer = data.customer;
+        const stats = data.stats;
+        
+        let itemsHTML = latestOrder.items.map(item => `
+            <tr>
+                <td>${item.product_code ? '[' + item.product_code + '] ' : ''}${item.product_name}</td>
+                <td style="text-align: center;">${item.quantity}</td>
+                <td style="text-align: right;">$${parseFloat(item.unit_price).toFixed(2)}</td>
+                <td style="text-align: right;">$${parseFloat(item.total_price).toFixed(2)}</td>
+            </tr>
+        `).join('');
+        
+        return `
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle"></i>
+                <strong>Existing Customer Found!</strong>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-user"></i>
+                            Customer Information
+                        </h3>
+                    </div>
+                    <div class="card-content">
+                        <p><strong>Name:</strong> ${customer.name}</p>
+                        <p><strong>Phone:</strong> ${customer.phone}</p>
+                        <p><strong>Address:</strong> ${customer.address}</p>
+                        <button type="button" class="btn btn-primary btn-sm" onclick="fillCustomerInfo('${customer.name}', '${customer.phone}', '${customer.address.replace(/'/g, "\\'")}')">
+                            <i class="fas fa-copy"></i>
+                            Use This Information
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-chart-bar"></i>
+                            Customer Statistics
+                        </h3>
+                    </div>
+                    <div class="card-content">
+                        <p><strong>Total Orders:</strong> ${stats.total_orders}</p>
+                        <p><strong>Total Spent:</strong> $${parseFloat(stats.total_spent).toFixed(2)}</p>
+                        <p><strong>First Order:</strong> ${new Date(stats.first_order_date).toLocaleDateString()}</p>
+                        <p><strong>Last Order:</strong> ${new Date(stats.last_order_date).toLocaleDateString()}</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <i class="fas fa-receipt"></i>
+                        Latest Order Details (ID: #${latestOrder.booking_id})
+                    </h3>
+                </div>
+                <div class="card-content">
+                    <div style="margin-bottom: 15px;">
+                        <p><strong>Order Date:</strong> ${new Date(latestOrder.order_date).toLocaleDateString()}</p>
+                        <p><strong>Delivery Date:</strong> ${latestOrder.delivery_date ? new Date(latestOrder.delivery_date).toLocaleDateString() : 'N/A'}</p>
+                        <p><strong>Payment Type:</strong> ${latestOrder.payment_type}</p>
+                        <p><strong>Total Amount:</strong> $${parseFloat(latestOrder.amount).toFixed(2)}</p>
+                    </div>
+                    
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th style="text-align: center;">Quantity</th>
+                                <th style="text-align: right;">Unit Price</th>
+                                <th style="text-align: right;">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${itemsHTML}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            ${data.order_history.length > 1 ? `
+                <div class="card" style="margin-top: 15px;">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-history"></i>
+                            Order History (${data.order_history.length} orders)
+                        </h3>
+                    </div>
+                    <div class="card-content">
+                        <div style="max-height: 200px; overflow-y: auto;">
+                            ${data.order_history.map(order => `
+                                <div style="padding: 10px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between;">
+                                    <span>Order #${order.booking_id} - ${new Date(order.order_date).toLocaleDateString()}</span>
+                                    <span><strong>$${parseFloat(order.amount).toFixed(2)}</strong> (${order.total_items} items)</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            ` : ''}
+        `;
+    }
+    
+    // Global function to fill customer information
+    window.fillCustomerInfo = function(name, phone, address) {
+        document.querySelector('input[name="customer_name"]').value = name;
+        document.querySelector('input[name="customer_phone"]').value = phone;
+        document.querySelector('textarea[name="customer_address"]').value = address;
+        
+        // Scroll to customer form
+        document.querySelector('input[name="customer_name"]').scrollIntoView({ behavior: 'smooth' });
+        
+        // Show success message
+        const successMsg = document.createElement('div');
+        successMsg.className = 'alert alert-success';
+        successMsg.innerHTML = '<i class="fas fa-check"></i> Customer information filled successfully!';
+        successMsg.style.position = 'fixed';
+        successMsg.style.top = '20px';
+        successMsg.style.right = '20px';
+        successMsg.style.zIndex = '9999';
+        document.body.appendChild(successMsg);
+        
+        setTimeout(() => {
+            successMsg.remove();
+        }, 3000);
+    };
+    
     // Check for pre-selected products from session storage
     const selectedProducts = sessionStorage.getItem('selectedProducts');
     if (selectedProducts) {
@@ -323,6 +574,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         updateOrderSummary();
+    } else {
+        // Initialize searchable select for the default first item
+        const firstSearchContainer = itemsContainer.querySelector('.searchable-select-container');
+        if (firstSearchContainer) {
+            initializeSearchableSelect(firstSearchContainer);
+        }
     }
     
     // Add item button
@@ -359,7 +616,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Handle item changes
     itemsContainer.addEventListener('change', function(e) {
         if (e.target.classList.contains('product-select')) {
-            updateProductPrice(e.target);
+            updateProductPriceFromSelect(e.target);
         }
         updateItemAmount(e.target.closest('.item-row'));
         updateOrderSummary();
@@ -378,6 +635,146 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initial calculation
     updateOrderSummary();
     
+    function initializeSearchableSelect(container) {
+        const searchInput = container.querySelector('.product-search');
+        const select = container.querySelector('.product-select');
+        const dropdown = container.querySelector('.search-dropdown');
+        const resultsContainer = container.querySelector('.search-results');
+        
+        // Handle search input
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            
+            if (searchTerm.length > 0) {
+                // Show search results
+                filterProducts(searchTerm, select, resultsContainer, dropdown);
+                dropdown.style.display = 'block';
+                
+                // Clear dropdown selection if search is active
+                if (select.value && !select.querySelector(`option[value="${select.value}"]`).textContent.toLowerCase().includes(searchTerm)) {
+                    select.value = '';
+                    updateProductPriceFromSelect(select);
+                }
+            } else {
+                // Hide search dropdown when search is empty
+                dropdown.style.display = 'none';
+            }
+        });
+        
+        // Handle search input focus
+        searchInput.addEventListener('focus', function() {
+            const searchTerm = this.value.toLowerCase();
+            if (searchTerm.length > 0) {
+                filterProducts(searchTerm, select, resultsContainer, dropdown);
+                dropdown.style.display = 'block';
+            }
+        });
+        
+        // Handle dropdown selection change
+        select.addEventListener('change', function() {
+            if (this.value) {
+                const selectedOption = this.querySelector(`option[value="${this.value}"]`);
+                if (selectedOption) {
+                    searchInput.value = selectedOption.textContent.trim();
+                }
+            } else {
+                searchInput.value = '';
+            }
+            dropdown.style.display = 'none';
+        });
+        
+        // Handle clicks outside to close dropdown
+        document.addEventListener('click', function(e) {
+            if (!container.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+        
+        // Handle result selection
+        resultsContainer.addEventListener('click', function(e) {
+            const resultItem = e.target.closest('.search-result-item');
+            if (resultItem) {
+                const optionValue = resultItem.dataset.value;
+                const optionText = resultItem.textContent.trim();
+                
+                // Update hidden select
+                select.value = optionValue;
+                
+                // Update search input
+                searchInput.value = optionText;
+                
+                // Hide dropdown
+                dropdown.style.display = 'none';
+                
+                // Trigger change event on select
+                const changeEvent = new Event('change', { bubbles: true });
+                select.dispatchEvent(changeEvent);
+            }
+        });
+        
+        // Handle escape key to close dropdown
+        searchInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                dropdown.style.display = 'none';
+                this.blur();
+            }
+        });
+        
+        // Clear search when dropdown selection is made manually
+        select.addEventListener('focus', function() {
+            dropdown.style.display = 'none';
+        });
+    }
+    
+    // Update the existing updateProductPrice function to work with the new setup
+    function updateProductPriceFromSelect(selectElement) {
+        const selectedOption = selectElement.selectedOptions[0];
+        const unitPriceInput = selectElement.closest('.item-row').querySelector('.unit-price');
+        
+        if (selectedOption && selectedOption.dataset.price) {
+            unitPriceInput.value = selectedOption.dataset.price;
+        } else {
+            unitPriceInput.value = '';
+        }
+    }
+    
+    function filterProducts(searchTerm, select, resultsContainer, dropdown) {
+        const options = select.querySelectorAll('option[value!=""]');
+        let matchingOptions = [];
+        
+        // If search term is empty, show all options
+        if (!searchTerm) {
+            matchingOptions = Array.from(options);
+        } else {
+            // Filter options based on search term
+            matchingOptions = Array.from(options).filter(option => {
+                const searchText = option.dataset.searchText || option.textContent.toLowerCase();
+                return searchText.includes(searchTerm);
+            });
+        }
+        
+        // Create dropdown items
+        let resultsHtml = '';
+        if (matchingOptions.length === 0) {
+            resultsHtml = '<div class="search-no-results">No products found</div>';
+        } else {
+            matchingOptions.slice(0, 10).forEach(option => { // Limit to 10 results
+                resultsHtml += `
+                    <div class="search-result-item" data-value="${option.value}">
+                        ${option.textContent}
+                    </div>
+                `;
+            });
+            
+            if (matchingOptions.length > 10) {
+                resultsHtml += '<div class="search-more-results">... and ' + (matchingOptions.length - 10) + ' more results</div>';
+            }
+        }
+        
+        resultsContainer.innerHTML = resultsHtml;
+        dropdown.style.display = 'block';
+    }
+    
     function addItemRow(preselectedProduct = null) {
         const div = document.createElement('div');
         div.className = 'item-row';
@@ -385,21 +782,28 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Product *</label>
-                    <select name="items[${itemCount}][product_id]" class="form-select product-select" required>
-                        <option value="">Select Product</option>
-                        <?php foreach ($products as $product): ?>
-                        <option value="<?php echo $product['id']; ?>" 
-                                data-price="<?php echo $product['price']; ?>"
-                                data-stock="<?php echo $product['stock_quantity']; ?>">
-                            <?php if ($product['product_code']): ?>
-                            [<?php echo htmlspecialchars($product['product_code']); ?>] 
-                            <?php endif; ?>
-                            <?php echo htmlspecialchars($product['name']); ?> - 
-                            <?php echo formatCurrency($product['price']); ?>
-                            (Stock: <?php echo $product['stock_quantity']; ?>)
-                        </option>
-                        <?php endforeach; ?>
-                    </select>
+                    <div class="searchable-select-container">
+                        <input type="text" class="form-input product-search" placeholder="Search products..." autocomplete="off">
+                        <select name="items[${itemCount}][product_id]" class="form-select product-select" required>
+                            <option value="">Select Product</option>
+                            <?php foreach ($products as $product): ?>
+                            <option value="<?php echo $product['id']; ?>" 
+                                    data-price="<?php echo $product['price']; ?>"
+                                    data-stock="<?php echo $product['stock_quantity']; ?>"
+                                    data-search-text="<?php echo strtolower(($product['product_code'] ? '[' . $product['product_code'] . '] ' : '') . $product['name']); ?>">
+                                <?php if ($product['product_code']): ?>
+                                [<?php echo htmlspecialchars($product['product_code']); ?>] 
+                                <?php endif; ?>
+                                <?php echo htmlspecialchars($product['name']); ?> - 
+                                <?php echo formatCurrency($product['price']); ?>
+                                (Stock: <?php echo $product['stock_quantity']; ?>)
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="search-dropdown" style="display: none;">
+                            <div class="search-results"></div>
+                        </div>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Quantity *</label>
@@ -424,30 +828,27 @@ document.addEventListener('DOMContentLoaded', function() {
         
         itemsContainer.appendChild(div);
         
+        // Initialize searchable dropdown for this new item
+        initializeSearchableSelect(div.querySelector('.searchable-select-container'));
+        
         // If preselected product, set values
         if (preselectedProduct) {
             const select = div.querySelector('.product-select');
+            const searchInput = div.querySelector('.product-search');
             const quantityInput = div.querySelector('.quantity-input');
             
             select.value = preselectedProduct.id;
+            const selectedOption = select.querySelector(`option[value="${preselectedProduct.id}"]`);
+            if (selectedOption) {
+                searchInput.value = selectedOption.textContent.trim();
+            }
             quantityInput.value = preselectedProduct.quantity;
             
-            updateProductPrice(select);
+            updateProductPriceFromSelect(select);
             updateItemAmount(div);
         }
         
         itemCount++;
-    }
-    
-    function updateProductPrice(selectElement) {
-        const selectedOption = selectElement.selectedOptions[0];
-        const unitPriceInput = selectElement.closest('.item-row').querySelector('.unit-price');
-        
-        if (selectedOption && selectedOption.dataset.price) {
-            unitPriceInput.value = selectedOption.dataset.price;
-        } else {
-            unitPriceInput.value = '';
-        }
     }
     
     function updateItemAmount(itemRow) {
