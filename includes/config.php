@@ -26,7 +26,38 @@ try {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 } catch(PDOException $e) {
-    die("Connection failed: " . $e->getMessage());
+    // Display user-friendly error
+    echo "<!DOCTYPE html>";
+    echo "<html>";
+    echo "<head>";
+    echo "<meta charset='UTF-8'>";
+    echo "<meta name='viewport' content='width=device-width, initial-scale=1.0'>";
+    echo "<title>Database Connection Error - " . APP_NAME . "</title>";
+    echo "<style>";
+    echo "body { font-family: Arial, sans-serif; background: #f0f0f0; margin: 0; padding: 20px; }";
+    echo ".error-container { background: white; max-width: 600px; margin: 50px auto; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }";
+    echo ".error-container h1 { color: #d32f2f; }";
+    echo ".error-message { background: #ffebee; padding: 15px; border-left: 4px solid #d32f2f; border-radius: 4px; margin: 20px 0; }";
+    echo ".solution { background: #e8f5e9; padding: 15px; border-left: 4px solid #4caf50; border-radius: 4px; margin: 20px 0; }";
+    echo "</style>";
+    echo "</head>";
+    echo "<body>";
+    echo "<div class='error-container'>";
+    echo "<h1>⚠️ Database Connection Failed</h1>";
+    echo "<div class='error-message'>";
+    echo "<strong>Error:</strong> " . htmlspecialchars($e->getMessage());
+    echo "</div>";
+    echo "<div class='solution'>";
+    echo "<strong>Solution:</strong><br>";
+    echo "1. First time setup? Run the <a href='setup.php' style='color: #2563eb;'>setup.php</a> file to initialize the database.<br>";
+    echo "2. Make sure MySQL is running on localhost<br>";
+    echo "3. Check that the database user 'root' exists with a blank password<br>";
+    echo "4. If your database credentials are different, update 'includes/config.php'";
+    echo "</div>";
+    echo "</div>";
+    echo "</body>";
+    echo "</html>";
+    exit();
 }
 
 // Helper functions
